@@ -8,19 +8,27 @@ type Chunk struct {
 	Size     int
 }
 
-type Chunker struct {
+type Chunker interface {
+	Split(filename, text string) []Chunk
+}
+
+type CharChunker struct {
 	MaxChunkSize int
 	Overlap      int
 }
 
-func CreateChunker(maxChunksize, overlap int) *Chunker {
-	return &Chunker{
-		MaxChunkSize: maxChunksize,
+type LineChunker struct {
+	MaxChunkSize int
+}
+
+func NewCharChunker(maxChunkSize, overlap int) *CharChunker {
+	return &CharChunker{
+		MaxChunkSize: maxChunkSize,
 		Overlap:      overlap,
 	}
 }
 
-func (c *Chunker) SplitByCharacters(filename, text string) []Chunk {
+func (c *CharChunker) Split(filename, text string) []Chunk {
 	runes := []rune(text)
 	var chunks []Chunk
 	length := len(runes)
@@ -47,10 +55,15 @@ func (c *Chunker) SplitByCharacters(filename, text string) []Chunk {
 	return chunks
 }
 
-func (c *Chunker) SplitByLine(filename, text string) []Chunk {
+func NewLineChunker(maxChunkSize int) *LineChunker {
+	return &LineChunker{
+		MaxChunkSize: maxChunkSize,
+	}
+}
+
+func (c *LineChunker) Split(filename, text string) []Chunk {
 	lines := strings.Split(text, "\n")
 	var chunks []Chunk
-
 	var currentChunk []string
 	currentLength := 0
 
@@ -64,10 +77,12 @@ func (c *Chunker) SplitByLine(filename, text string) []Chunk {
 				Content:  content,
 				Size:     len(content),
 			})
-		} else {
-			currentChunk = append(currentChunk, line)
-			currentLength += lineLen
+			currentChunk = nil
+			currentLength = 0
 		}
+
+		currentChunk = append(currentChunk, line)
+		currentLength += lineLen
 	}
 
 	if len(currentChunk) > 0 {

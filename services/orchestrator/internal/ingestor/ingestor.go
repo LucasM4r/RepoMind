@@ -52,8 +52,8 @@ func ProcessZip(resp io.ReadCloser) error {
 			continue
 		}
 
-		chunker := chunker.CreateChunker(1500, 150)
-		chunkers := chunker.SplitByLine(file.Name, text)
+		chunker := chunker.NewLineChunker(1500)
+		chunkers := chunker.Split(file.Name, text)
 
 		fmt.Printf("--- %s: O arquivo original de %d bytes gerou %d chunks.\n", file.Name, len(content), len(chunkers))
 	}
