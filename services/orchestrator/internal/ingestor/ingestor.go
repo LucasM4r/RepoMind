@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"log"
 	"path/filepath"
@@ -55,7 +54,7 @@ func ProcessZip(resp io.ReadCloser) error {
 		chunker := chunker.NewLineChunker(1500)
 		chunkers := chunker.Split(file.Name, text)
 
-		fmt.Printf("--- %s: O arquivo original de %d bytes gerou %d chunks.\n", file.Name, len(content), len(chunkers))
+		log.Printf("[INFO] %s: The original file of %d bytes generated %d chunks.\n", file.Name, len(content), len(chunkers))
 	}
 	return nil
 }
