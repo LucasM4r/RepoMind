@@ -10,9 +10,9 @@ import (
 	"strconv"
 
 	"github.com/LucasM4r/repomind/internal/chunker"
+	"github.com/LucasM4r/repomind/internal/db"
 	"github.com/LucasM4r/repomind/internal/providers"
 	"github.com/LucasM4r/repomind/internal/rpc"
-	"github.com/LucasM4r/repomind/internal/vector_db"
 )
 
 type Job struct {
@@ -23,10 +23,10 @@ type Job struct {
 
 type Ingestor struct {
 	AIClient *rpc.AIClient
-	Repo     *vector_db.VectorRepository
+	Repo     *db.VectorRepository
 }
 
-func NewIngestor(ai *rpc.AIClient, repo *vector_db.VectorRepository) *Ingestor {
+func NewIngestor(ai *rpc.AIClient, repo *db.VectorRepository) *Ingestor {
 	return &Ingestor{AIClient: ai, Repo: repo}
 }
 
@@ -40,7 +40,7 @@ func Worker(ctx context.Context, id int, jobs <-chan Job, ing *Ingestor) {
 			continue
 		}
 
-		if err := ing.ProcessZip(ctx, resp); err != nil {
+		if err := ing.ProcessZip(ctx, job.Owner, job.Repo, resp); err != nil {
 			log.Printf("[ERROR][WORKER %d] Error processing zip %s: %v\n", id, job.Repo, err)
 		}
 		resp.Close()
@@ -49,7 +49,7 @@ func Worker(ctx context.Context, id int, jobs <-chan Job, ing *Ingestor) {
 	}
 }
 
-func (in *Ingestor) ProcessZip(ctx context.Context, resp io.ReadCloser) error {
+func (in *Ingestor) ProcessZip(ctx context.Context, owner, repo string, resp io.ReadCloser) error {
 	bodyBytes, err := io.ReadAll(resp)
 	if err != nil {
 		return err
@@ -65,14 +65,13 @@ func (in *Ingestor) ProcessZip(ctx context.Context, resp io.ReadCloser) error {
 			continue
 		}
 
-		if err := in.processFile(ctx, file); err != nil {
+		if err := in.processFile(ctx, owner, repo, file); err != nil {
 			log.Printf("[WARNING] Failed to process file %s: %v", file.Name, err)
 		}
 	}
 	return nil
 }
-
-func (in *Ingestor) processFile(ctx context.Context, file *zip.File) error {
+func (in *Ingestor) processFile(ctx context.Context, owner, repo string, file *zip.File) error {
 	rc, err := file.Open()
 	if err != nil {
 		return err
@@ -89,16 +88,16 @@ func (in *Ingestor) processFile(ctx context.Context, file *zip.File) error {
 		return nil
 	}
 
-	c := chunker.NewLineChunker(1500)
-	chunks := c.Split(file.Name, text)
+	c := chunker.NewLineChunker(1500, 50)
+	chunks := c.Split(owner, repo, file.Name, text)
 
 	if len(chunks) > 0 {
-		return in.embedAndSave(ctx, file.Name, chunks)
+		return in.embedAndSave(ctx, chunks)
 	}
 	return nil
 }
 
-func (in *Ingestor) embedAndSave(ctx context.Context, filename string, chunks []chunker.Chunk) error {
+func (in *Ingestor) embedAndSave(ctx context.Context, chunks []chunker.Chunk) error {
 	var texts []string
 	for _, chunk := range chunks {
 		texts = append(texts, chunk.Content)
@@ -110,17 +109,14 @@ func (in *Ingestor) embedAndSave(ctx context.Context, filename string, chunks []
 	}
 
 	for i, chunk := range chunks {
-		chunkID := filename + "_chunk_" + strconv.Itoa(i)
+		chunkID := chunk.Filename + "_chunk_" + strconv.Itoa(i)
 
-		if i < len(respAI.Embeddings) {
-			embedding := respAI.Embeddings[i].Values
-			if err := in.Repo.SaveChunk(ctx, chunkID, chunk.Content, embedding); err != nil {
-				log.Printf("[ERROR] Failed to save chunk %s to DB: %v", chunkID, err)
-			}
+		embedding := respAI.Embeddings[i].Values
+		err := in.Repo.SaveChunk(ctx, chunk.Owner, chunk.Repo, chunk.Filename, chunkID, chunk.Content, embedding)
+		if err != nil {
+			return err
 		}
 	}
-
-	log.Printf("[INFO] %s: Successfully processed and saved %d chunks.\n", filename, len(chunks))
 	return nil
 }
 

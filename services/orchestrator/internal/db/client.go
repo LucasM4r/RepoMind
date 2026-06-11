@@ -1,4 +1,4 @@
-package vector_db
+package db
 
 import (
 	"context"

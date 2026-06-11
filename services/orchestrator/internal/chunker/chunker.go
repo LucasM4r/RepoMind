@@ -3,13 +3,15 @@ package chunker
 import "strings"
 
 type Chunk struct {
+	Owner    string
+	Repo     string
 	Filename string
 	Content  string
 	Size     int
 }
 
 type Chunker interface {
-	Split(filename, text string) []Chunk
+	Split(owner, repo, filename, text string) []Chunk
 }
 
 type CharChunker struct {
@@ -19,6 +21,7 @@ type CharChunker struct {
 
 type LineChunker struct {
 	MaxChunkSize int
+	OverlapLines int
 }
 
 func NewCharChunker(maxChunkSize, overlap int) *CharChunker {
@@ -28,7 +31,7 @@ func NewCharChunker(maxChunkSize, overlap int) *CharChunker {
 	}
 }
 
-func (c *CharChunker) Split(filename, text string) []Chunk {
+func (c *CharChunker) Split(owner, repo, filename, text string) []Chunk {
 	runes := []rune(text)
 	var chunks []Chunk
 	length := len(runes)
@@ -46,6 +49,8 @@ func (c *CharChunker) Split(filename, text string) []Chunk {
 
 		content := string(runes[i:end])
 		chunks = append(chunks, Chunk{
+			Owner:    owner,
+			Repo:     repo,
 			Filename: filename,
 			Content:  content,
 			Size:     len(content),
@@ -55,16 +60,18 @@ func (c *CharChunker) Split(filename, text string) []Chunk {
 	return chunks
 }
 
-func NewLineChunker(maxChunkSize int) *LineChunker {
+func NewLineChunker(maxChunkSize, overlapLines int) *LineChunker {
 	return &LineChunker{
 		MaxChunkSize: maxChunkSize,
+		OverlapLines: overlapLines,
 	}
 }
 
-func (c *LineChunker) Split(filename, text string) []Chunk {
+func (c *LineChunker) Split(owner, repo, filename, text string) []Chunk {
 	lines := strings.Split(text, "\n")
 	var chunks []Chunk
 	var currentChunk []string
+	var overlapBuffer []string
 	currentLength := 0
 
 	for _, line := range lines {
@@ -73,12 +80,26 @@ func (c *LineChunker) Split(filename, text string) []Chunk {
 		if currentLength+lineLen > c.MaxChunkSize && len(currentChunk) > 0 {
 			content := strings.Join(currentChunk, "\n")
 			chunks = append(chunks, Chunk{
+				Owner:    owner,
+				Repo:     repo,
 				Filename: filename,
 				Content:  content,
 				Size:     len(content),
 			})
-			currentChunk = nil
+
+			if c.OverlapLines > 0 {
+				startIdx := len(currentChunk) - c.OverlapLines
+				if startIdx < 0 {
+					startIdx = 0
+				}
+				overlapBuffer = currentChunk[startIdx:]
+			}
+
+			currentChunk = append([]string{}, overlapBuffer...)
 			currentLength = 0
+			for _, l := range currentChunk {
+				currentLength += len(l) + 1
+			}
 		}
 
 		currentChunk = append(currentChunk, line)
@@ -88,6 +109,8 @@ func (c *LineChunker) Split(filename, text string) []Chunk {
 	if len(currentChunk) > 0 {
 		content := strings.Join(currentChunk, "\n")
 		chunks = append(chunks, Chunk{
+			Owner:    owner,
+			Repo:     repo,
 			Filename: filename,
 			Content:  content,
 			Size:     len(content),

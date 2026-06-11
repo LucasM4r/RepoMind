@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/LucasM4r/repomind/internal/config"
+	"github.com/LucasM4r/repomind/internal/db"
 	"github.com/LucasM4r/repomind/internal/ingestor"
 	"github.com/LucasM4r/repomind/internal/providers"
 	"github.com/LucasM4r/repomind/internal/providers/github"
 	"github.com/LucasM4r/repomind/internal/rpc"
-	"github.com/LucasM4r/repomind/internal/vector_db"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
@@ -23,7 +23,7 @@ type App struct {
 	dbPool     *pgxpool.Pool
 	grpcConn   *grpc.ClientConn
 	aiClient   *rpc.AIClient
-	vectorRepo *vector_db.VectorRepository
+	vectorRepo *db.VectorRepository
 	ghProvider providers.Fetcher
 }
 
@@ -36,12 +36,12 @@ func NewApp(cfg *config.Config) (*App, error) {
 	}
 	aiClient := rpc.NewAIClient(conn)
 
-	pool, err := vector_db.NewPool(ctx, cfg.DatabaseURL)
+	pool, err := db.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {
 		conn.Close()
 		return nil, err
 	}
-	repo := vector_db.VectorRepository{DB: pool}
+	repo := db.VectorRepository{DB: pool}
 
 	ghProvider := github.NewClient(cfg.GithubToken)
 
