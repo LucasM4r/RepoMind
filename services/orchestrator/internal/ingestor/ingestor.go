@@ -32,21 +32,31 @@ func NewIngestor(ai *rpc.AIClient, repo *db.VectorRepository) *Ingestor {
 
 func Worker(ctx context.Context, id int, jobs <-chan Job, ing *Ingestor) {
 	for job := range jobs {
-		log.Printf("[INFO][WORKER %d] Initializing download: %s/%s\n", id, job.Owner, job.Repo)
-
-		resp, err := job.Provider.FetchRepoZip(ctx, job.Owner, job.Repo)
-		if err != nil {
-			log.Printf("[ERROR][WORKER %d] Error downloading %s: %v\n", id, job.Repo, err)
-			continue
-		}
-
-		if err := ing.ProcessZip(ctx, job.Owner, job.Repo, resp); err != nil {
-			log.Printf("[ERROR][WORKER %d] Error processing zip %s: %v\n", id, job.Repo, err)
-		}
-		resp.Close()
-
-		log.Printf("[INFO][WORKER %d] Done %s/%s\n", id, job.Owner, job.Repo)
+		ing.processJob(ctx, id, job)
 	}
+}
+
+func (in *Ingestor) processJob(ctx context.Context, id int, job Job) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[CRITICAL][WORKER %d] Panic recovered when processing %s/%s: %v\n", id, job.Owner, job.Repo, r)
+		}
+	}()
+
+	log.Printf("[INFO][WORKER %d] Initializing download: %s/%s\n", id, job.Owner, job.Repo)
+
+	resp, err := job.Provider.FetchRepoZip(ctx, job.Owner, job.Repo)
+	if err != nil {
+		log.Printf("[ERROR][WORKER %d] Error downloading %s: %v\n", id, job.Repo, err)
+		return
+	}
+	defer resp.Close()
+
+	if err := in.ProcessZip(ctx, job.Owner, job.Repo, resp); err != nil {
+		log.Printf("[ERROR][WORKER %d] Error processing zip %s: %v\n", id, job.Repo, err)
+	}
+
+	log.Printf("[INFO][WORKER %d] Done %s/%s\n", id, job.Owner, job.Repo)
 }
 
 func (in *Ingestor) ProcessZip(ctx context.Context, owner, repo string, resp io.ReadCloser) error {
