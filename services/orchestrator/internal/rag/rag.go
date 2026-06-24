@@ -24,24 +24,21 @@ func NewRAGService(ai *rpc.AIClient, db *db.VectorRepository, cache *cache.Sessi
 	return &RAG{AIClient: ai, DB: db, Cache: cache, promptHistoryLimit: promptHistoryLimit}
 }
 
-func (r *RAG) initRAGCache(ctx context.Context, sessionID string) error {
-	history, err := r.DB.GetRecentHistory(ctx, sessionID, r.promptHistoryLimit)
-	if err != nil {
-		return fmt.Errorf("[RAG][DB] failed to get recent history: %w", err)
-	}
-	r.Cache.Set(sessionID, history)
-	return nil
-}
+func (r *RAG) GenerateResponse(ctx context.Context, sessionID, owner, repo, userPrompt string) (string, error) {
+	const retrievalMaxDistance float32 = 0.8
+	const retrievalTopK = 5
 
-func (r *RAG) promptWithHistory(ctx context.Context, sessionID string, userPrompt string) (string, error) {
-	history, ok := r.Cache.Get(sessionID)
-	if !ok {
-		fmt.Printf("[WARNING][RAG] no history found for sessionID: %s. Initializing cache...\n", sessionID)
-		if err := r.initRAGCache(ctx, sessionID); err != nil {
-			return "", err
-		}
-		history, _ = r.Cache.Get(sessionID)
+	history, err := r.getHistory(ctx, sessionID)
+	if err != nil {
+		return "", fmt.Errorf("[ERROR][RAG] failed to get history: %w", err)
 	}
+
+	chunks, err := r.retrieveRelevantChunks(ctx, owner, repo, userPrompt, retrievalMaxDistance, retrievalTopK)
+	if err != nil {
+		return "", fmt.Errorf("[ERROR][RAG][Retrieval] failed to retrieve relevant chunks: %w", err)
+	}
+
+	retrievedContext := buildRetrievedContext(chunks)
 
 	userPromptMessage := domain.ChatMessage{
 		Role:    "user",
@@ -52,13 +49,19 @@ func (r *RAG) promptWithHistory(ctx context.Context, sessionID string, userPromp
 		return "", fmt.Errorf("[ERROR][RAG][DB] failed to save user message: %w", err)
 	}
 
-	if len(history) >= r.promptHistoryLimit {
-		history = append([]domain.ChatMessage(nil), history[len(history)-r.promptHistoryLimit+1:]...)
+	llmHistory := trimHistory(history, r.promptHistoryLimit-1)
+	if retrievedContext != "" {
+		llmHistory = append(trimHistory(llmHistory, r.promptHistoryLimit-1), domain.ChatMessage{
+			Role:    "system",
+			Content: retrievedContext,
+		})
 	}
-	history = append(history, userPromptMessage)
+	llmHistory = append(trimHistory(llmHistory, r.promptHistoryLimit-1), userPromptMessage)
+
+	history = append(trimHistory(history, r.promptHistoryLimit-1), userPromptMessage)
 	r.updateCache(sessionID, history)
 
-	response, err := r.AIClient.GenerateText(ctx, history)
+	response, err := r.AIClient.GenerateText(ctx, llmHistory)
 	if err != nil {
 		return "", fmt.Errorf("[ERROR][RAG][AIClient] failed to generate text: %w", err)
 	}
@@ -67,14 +70,7 @@ func (r *RAG) promptWithHistory(ctx context.Context, sessionID string, userPromp
 		return "", fmt.Errorf("[ERROR][RAG][DB] failed to save assistant message: %w", err)
 	}
 
-	history = append(history, response)
+	history = append(trimHistory(history, r.promptHistoryLimit-1), response)
 	r.updateCache(sessionID, history)
 	return response.Content, nil
-}
-
-func (r *RAG) updateCache(sessionID string, history []domain.ChatMessage) {
-	if len(history) > r.promptHistoryLimit {
-		history = append([]domain.ChatMessage(nil), history[len(history)-r.promptHistoryLimit:]...)
-	}
-	r.Cache.Set(sessionID, history)
 }
