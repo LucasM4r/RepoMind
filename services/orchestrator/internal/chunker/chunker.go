@@ -1,17 +1,13 @@
 package chunker
 
-import "strings"
+import (
+	"strings"
 
-type Chunk struct {
-	Owner    string
-	Repo     string
-	Filename string
-	Content  string
-	Size     int
-}
+	"github.com/LucasM4r/repomind/internal/domain"
+)
 
 type Chunker interface {
-	Split(owner, repo, filename, text string) []Chunk
+	Split(owner, repo, filename, text string) []domain.RawChunk
 }
 
 type CharChunker struct {
@@ -31,9 +27,9 @@ func NewCharChunker(maxChunkSize, overlap int) *CharChunker {
 	}
 }
 
-func (c *CharChunker) Split(owner, repo, filename, text string) []Chunk {
+func (c *CharChunker) Split(owner, repo, filename, text string) []domain.RawChunk {
 	runes := []rune(text)
-	var chunks []Chunk
+	var chunks []domain.RawChunk
 	length := len(runes)
 
 	step := c.MaxChunkSize - c.Overlap
@@ -48,7 +44,7 @@ func (c *CharChunker) Split(owner, repo, filename, text string) []Chunk {
 		}
 
 		content := string(runes[i:end])
-		chunks = append(chunks, Chunk{
+		chunks = append(chunks, domain.RawChunk{
 			Owner:    owner,
 			Repo:     repo,
 			Filename: filename,
@@ -67,9 +63,9 @@ func NewLineChunker(maxChunkSize, overlapLines int) *LineChunker {
 	}
 }
 
-func (c *LineChunker) Split(owner, repo, filename, text string) []Chunk {
+func (c *LineChunker) Split(owner, repo, filename, text string) []domain.RawChunk {
 	lines := strings.Split(text, "\n")
-	var chunks []Chunk
+	var chunks []domain.RawChunk
 	var currentChunk []string
 	var overlapBuffer []string
 	currentLength := 0
@@ -79,7 +75,7 @@ func (c *LineChunker) Split(owner, repo, filename, text string) []Chunk {
 
 		if currentLength+lineLen > c.MaxChunkSize && len(currentChunk) > 0 {
 			content := strings.Join(currentChunk, "\n")
-			chunks = append(chunks, Chunk{
+			chunks = append(chunks, domain.RawChunk{
 				Owner:    owner,
 				Repo:     repo,
 				Filename: filename,
@@ -108,7 +104,7 @@ func (c *LineChunker) Split(owner, repo, filename, text string) []Chunk {
 
 	if len(currentChunk) > 0 {
 		content := strings.Join(currentChunk, "\n")
-		chunks = append(chunks, Chunk{
+		chunks = append(chunks, domain.RawChunk{
 			Owner:    owner,
 			Repo:     repo,
 			Filename: filename,
