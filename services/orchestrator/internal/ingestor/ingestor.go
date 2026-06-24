@@ -11,6 +11,7 @@ import (
 
 	"github.com/LucasM4r/repomind/internal/chunker"
 	"github.com/LucasM4r/repomind/internal/db"
+	"github.com/LucasM4r/repomind/internal/domain"
 	"github.com/LucasM4r/repomind/internal/providers"
 	"github.com/LucasM4r/repomind/internal/rpc"
 )
@@ -107,7 +108,7 @@ func (in *Ingestor) processFile(ctx context.Context, owner, repo string, file *z
 	return nil
 }
 
-func (in *Ingestor) embedAndSave(ctx context.Context, chunks []chunker.Chunk) error {
+func (in *Ingestor) embedAndSave(ctx context.Context, chunks []domain.RawChunk) error {
 	var texts []string
 	for _, chunk := range chunks {
 		texts = append(texts, chunk.Content)
