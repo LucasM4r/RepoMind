@@ -22,6 +22,56 @@ func (r *VectorRepository) SaveChunk(ctx context.Context, owner, repo, filename,
 	return err
 }
 
+func (r *VectorRepository) GetChunks(
+	ctx context.Context,
+	owner, repo string,
+	embedding []float32,
+	maxDistance float32,
+	limit int,
+) ([]domain.RetrievedChunk, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+
+	vec := pgvector.NewVector(embedding)
+	query := `
+        SELECT id, owner, repo, content, embedding <-> $3 AS distance
+        FROM chunks
+        WHERE owner = $1
+          AND repo = $2
+          AND embedding <-> $3 < $4
+        ORDER BY embedding <-> $3 ASC
+        LIMIT $5
+    `
+
+	rows, err := r.DB.Query(ctx, query, owner, repo, vec, maxDistance, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var chunks []domain.RetrievedChunk
+	for rows.Next() {
+		var chunk domain.RetrievedChunk
+		if err := rows.Scan(
+			&chunk.ID,
+			&chunk.Owner,
+			&chunk.Repo,
+			&chunk.Content,
+			&chunk.Distance,
+		); err != nil {
+			return nil, err
+		}
+		chunks = append(chunks, chunk)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return chunks, nil
+}
+
 func (r *VectorRepository) SaveMessage(ctx context.Context, sessionID, role, content string) error {
 	query := `
         INSERT INTO chat_history (session_id, role, content) 
