@@ -1,0 +1,94 @@
+name: AI Code Review Agent
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    # --- PERMISSIONS FOR CODE REVIEW AGENT ---
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      # --- CLONE REPOSITORY TO WORKSPACE ---
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # --- CONFIGURE PYTHON ENVIRONMENT ---
+      - name: Configure Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # --- INSTALL SDKs FOR AI ---
+      - name: Install SDKs for AI
+        run: pip install google-generativeai openai
+
+      - name: Run AI Code Review Agent
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          LLM_PROVIDER: "gemini"
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        # --- RUN THE AI CODE REVIEW SCRIPT ---
+        run: |
+          # Fetch the diff of the pull request and save it to a file
+          gh pr diff $PR_NUMBER > pr_diff.txt
+
+          # Create a Python script to perform the code review
+          cat << 'EOF' > review.py
+          import os
+
+          # Get the LLM provider from environment variable
+          provider = os.getenv('LLM_PROVIDER', 'gemini').lower()
+
+          # Read the diff from the file
+          with open('pr_diff.txt', 'r') as f:
+              diff = f.read()
+
+          # Check if the diff is too small to review
+          if len(diff.strip()) < 10:
+              with open('review_comment.txt', 'w') as f:
+                  f.write("No significant changes detected.")
+              exit()
+
+          # Prepare the prompt for the AI model (CORRIGIDO PARA ASPAS TRIPLAS)
+          prompt = f"""Please perform a thorough code review of this Pull Request, focusing strictly on bugs, security vulnerabilities, and performance issues.
+
+          {diff}
+
+          Provide specific suggestions for improvement and explain the reasoning behind each suggestion. Be concise and clear. Do not comment on simple stylistic formatting."""
+          review_text = ""
+
+          # Conditional logic to choose the API
+          if provider == 'openai':
+              from openai import OpenAI
+              client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+              response = client.chat.completions.create(
+                  model="gpt-4o-mini",
+                  messages=[{"role": "user", "content": prompt}]
+              )
+              review_text = response.choices[0].message.content
+
+          elif provider == 'gemini':
+              import google.generativeai as genai
+              genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+              model = genai.GenerativeModel('gemini-1.5-flash')
+              response = model.generate_content(prompt)
+              review_text = response.text
+              
+          else:
+              review_text = f"Provider {provider} not supported."
+
+          with open('review_comment.txt', 'w') as f:
+              f.write(review_text)
+          EOF
+
+          python review.py
+          gh pr comment $PR_NUMBER --body-file review_comment.txt
