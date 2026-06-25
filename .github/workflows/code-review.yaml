@@ -1,0 +1,108 @@
+name: AI Code Review Agent
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    # --- PERMISSIONS FOR CODE REVIEW AGENT ---
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      # --- CLONE REPOSITORY TO WORKSPACE ---
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # --- CONFIGURE PYTHON ENVIRONMENT ---
+      - name: Configure Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # --- INSTALL SDKs FOR AI ---
+      - name: Install SDKs for AI
+        run: pip install google-genai openai
+
+      # --- RUN AI CODE REVIEW AGENT ---
+      - name: Run AI Code Review Agent
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          LLM_PROVIDER: "gemini"
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        # --- RUN THE AI CODE REVIEW SCRIPT ---
+        run: |
+          # Fetch the diff of the pull request and save it to a file
+          gh pr diff $PR_NUMBER > pr_diff.txt
+
+          # Create a Python script to perform the code review
+          cat << 'EOF' > review.py
+          import os
+
+          # Get the LLM provider and PR metadata from environment variables
+          provider = os.getenv('LLM_PROVIDER', 'gemini').lower()
+          pr_title = os.getenv('PR_TITLE', '')
+          pr_body = os.getenv('PR_BODY', '')
+
+          # Read the diff from the file
+          with open('pr_diff.txt', 'r') as f:
+              diff = f.read()
+
+          # Check if the diff is too small to review
+          if len(diff.strip()) < 10:
+              with open('review_comment.txt', 'w') as f:
+                  f.write("Nenhuma mudança significativa detectada.")
+              exit()
+
+          # Prepare the prompt including the architectural context
+          prompt = f"""You are a senior software engineer performing a code review.
+
+          Architectural & PR Context:
+          - PR Title: {pr_title}
+          - PR Description: {pr_body}
+
+          Please perform a thorough code review of the following git diff, keeping the PR context, clean architecture goals, and proper separation of concerns in mind. Focus strictly on architectural flaws, bugs, and security issues.
+
+          Git Diff:
+          {diff}
+
+          Provide specific suggestions for improvement and explain the reasoning behind each suggestion. Be concise and clear."""
+
+          review_text = ""
+
+          # Lógica condicional para escolher a API
+          if provider == 'openai':
+              from openai import OpenAI
+              client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+              response = client.chat.completions.create(
+                  model="gpt-4o-mini",
+                  messages=[{"role": "user", "content": prompt}]
+              )
+              review_text = response.choices[0].message.content
+
+          elif provider == 'gemini':
+              from google import genai
+              client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+              response = client.models.generate_content(
+                  model='gemini-1.5-flash',
+                  contents=prompt
+              )
+              review_text = response.text
+          else:
+              review_text = f"Provedor {provider} não suportado."
+
+          with open('review_comment.txt', 'w') as f:
+              f.write(review_text)
+          EOF
+
+          python review.py
+          gh pr comment $PR_NUMBER --body-file review_comment.txt
