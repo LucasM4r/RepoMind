@@ -60,12 +60,18 @@ jobs:
           # Check if the diff is too small to review
           if len(diff.strip()) < 10:
               with open('review_comment.txt', 'w') as f:
-                  f.write("Nenhuma mudança significativa detectada.")
+                  f.write("No significant changes detected.")
               exit()
 
           # Prepare the prompt including the architectural context
           prompt = f"""You are a senior software engineer performing a code review.
-
+          Guidelines for Review:
+          1. FOCUS: Only flag issues that are objectively problematic (bugs, security risks, architectural coupling, performance bottlenecks).
+          2. STYLE: Do NOT comment on trivial code style, naming preferences, or formatting unless it breaks readability or standard Go conventions.
+          3. TONE: Be constructive. If the code is well-written, acknowledge it.
+          4. THRESHOLD: Do not report minor issues that are purely subjective.
+          5. FORMAT: Use categories: [CRITICAL], [IMPROVEMENT], and [PRAISE].
+          If there are no [CRITICAL] or [IMPROVEMENT] issues, acknowledge the clean code and do not force a review comment just to have something to say.
           Architectural & PR Context:
           - PR Title: {pr_title}
           - PR Description: {pr_body}
@@ -78,8 +84,7 @@ jobs:
           Provide specific suggestions for improvement and explain the reasoning behind each suggestion. Be concise and clear."""
 
           review_text = ""
-
-          # Lógica condicional para escolher a API
+          # Conditionally use the appropriate LLM provider based on the environment variable
           if provider == 'openai':
               from openai import OpenAI
               client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
@@ -93,12 +98,12 @@ jobs:
               from google import genai
               client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
               response = client.models.generate_content(
-                  model='gemini-1.5-flash',
+                  model='gemini-2.5-flash',
                   contents=prompt
               )
               review_text = response.text
           else:
-              review_text = f"Provedor {provider} não suportado."
+              review_text = f"Provider {provider} not supported."
 
           with open('review_comment.txt', 'w') as f:
               f.write(review_text)
