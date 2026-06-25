@@ -39,7 +39,6 @@ jobs:
           LLM_PROVIDER: "gemini"
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        # --- RUN THE AI CODE REVIEW SCRIPT ---
         run: |
           # Fetch the diff of the pull request and save it to a file
           gh pr diff $PR_NUMBER > pr_diff.txt
@@ -71,7 +70,10 @@ jobs:
           3. TONE: Be constructive. If the code is well-written, acknowledge it.
           4. THRESHOLD: Do not report minor issues that are purely subjective.
           5. FORMAT: Use categories: [CRITICAL], [IMPROVEMENT], and [PRAISE].
+          6. CONTEXT AWARENESS: You are only evaluating a git diff, not the entire codebase. Do NOT flag missing type definitions, interfaces, or functions as errors if they are referenced but not defined in the diff. Assume they exist and are correctly implemented in the broader codebase unless the diff actively introduces an incomplete definition.
+
           If there are no [CRITICAL] or [IMPROVEMENT] issues, acknowledge the clean code and do not force a review comment just to have something to say.
+
           Architectural & PR Context:
           - PR Title: {pr_title}
           - PR Description: {pr_body}
@@ -79,32 +81,42 @@ jobs:
           Please perform a thorough code review of the following git diff, keeping the PR context, clean architecture goals, and proper separation of concerns in mind. Focus strictly on architectural flaws, bugs, and security issues.
 
           Git Diff:
+          ```diff
           {diff}
+          ```
 
           Provide specific suggestions for improvement and explain the reasoning behind each suggestion. Be concise and clear."""
 
           review_text = ""
-          # Conditionally use the appropriate LLM provider based on the environment variable
-          if provider == 'openai':
-              from openai import OpenAI
-              client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-              response = client.chat.completions.create(
-                  model="gpt-4o-mini",
-                  messages=[{"role": "user", "content": prompt}]
-              )
-              review_text = response.choices[0].message.content
 
-          elif provider == 'gemini':
-              from google import genai
-              client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-              response = client.models.generate_content(
-                  model='gemini-2.5-flash',
-                  contents=prompt
-              )
-              review_text = response.text
-          else:
-              review_text = f"Provider {provider} not supported."
+          try:
+              # Conditionally use the appropriate LLM provider based on the environment variable
+              if provider == 'openai':
+                  from openai import OpenAI
+                  client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+                  response = client.chat.completions.create(
+                      model="gpt-4o-mini",
+                      messages=[{"role": "user", "content": prompt}]
+                  )
+                  review_text = response.choices[0].message.content
 
+              elif provider == 'gemini':
+                  from google import genai
+                  client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+                  response = client.models.generate_content(
+                      model='gemini-2.5-flash',
+                      contents=prompt
+                  )
+                  review_text = response.text
+              else:
+                  review_text = f"Provider {provider} not supported."
+          except Exception as e:
+              review_text = f"⚠️ **AI Code Review Agent encountered an error.**\n\nFailed to generate review using `{provider}`. \nError details: `{str(e)}`"
+
+          # Add the disclaimer to the final review text
+          if review_text and not review_text.startswith("⚠️"):
+              review_text += "\n\n---\n*🤖 Note: I am an AI and only have visibility into the git diff of this PR, not the entire codebase. Please ignore any false positives regarding missing types, interfaces, or functions.*"
+              
           with open('review_comment.txt', 'w') as f:
               f.write(review_text)
           EOF
