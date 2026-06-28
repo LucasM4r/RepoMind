@@ -15,10 +15,10 @@ type VectorRepository struct {
 
 func (r *VectorRepository) SaveChunk(ctx context.Context, owner, repo, filename, chunkID, content string, embedding []float32) error {
 	vec := pgvector.NewVector(embedding)
-	query := `INSERT INTO chunks (id, owner, repo, content, embedding) 
-              VALUES ($1, $2, $3, $4, $5) 
-              ON CONFLICT (id) DO UPDATE SET embedding = $5, content = $4`
-	_, err := r.DB.Exec(ctx, query, chunkID, owner, repo, content, vec)
+	query := `INSERT INTO chunks (id, owner, repo, filename, content, embedding) 
+              VALUES ($1, $2, $3, $4, $5, $6) 
+              ON CONFLICT (id) DO UPDATE SET embedding = $6, content = $4`
+	_, err := r.DB.Exec(ctx, query, chunkID, owner, repo, filename, content, vec)
 	return err
 }
 
