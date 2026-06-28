@@ -17,7 +17,7 @@ func (r *VectorRepository) SaveChunk(ctx context.Context, owner, repo, filename,
 	vec := pgvector.NewVector(embedding)
 	query := `INSERT INTO chunks (id, owner, repo, filename, content, embedding) 
               VALUES ($1, $2, $3, $4, $5, $6) 
-              ON CONFLICT (id) DO UPDATE SET embedding = $6, content = $4`
+              ON CONFLICT (id) DO UPDATE SET embedding = $6, content = $5`
 	_, err := r.DB.Exec(ctx, query, chunkID, owner, repo, filename, content, vec)
 	return err
 }
