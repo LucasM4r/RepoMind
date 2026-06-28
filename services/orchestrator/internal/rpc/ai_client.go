@@ -22,7 +22,11 @@ func NewAIClient(conn *grpc.ClientConn) *AIClient {
 }
 
 func (c *AIClient) GetEmbeddings(ctx context.Context, texts []string) (*pb.EmbeddingResponse, error) {
-	return c.EmbeddingClient.GenerateEmbeddings(ctx, &pb.EmbeddingRequest{Texts: texts})
+	resp, err := c.EmbeddingClient.GenerateEmbeddings(ctx, &pb.EmbeddingRequest{Texts: texts})
+	if err != nil {
+		return nil, fmt.Errorf("[AIClient] failed to generate embeddings: %w", err)
+	}
+	return resp, nil
 }
 
 func (c *AIClient) GenerateText(ctx context.Context, history []domain.ChatMessage) (domain.ChatMessage, error) {
