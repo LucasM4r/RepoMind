@@ -19,15 +19,18 @@ type AskResponse struct {
 
 func (h *Handler) AskHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
 	var req AskRequest
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 
 	if err := dec.Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -35,7 +38,7 @@ func (h *Handler) AskHandler(w http.ResponseWriter, r *http.Request) {
 		strings.TrimSpace(req.Owner) == "" ||
 		strings.TrimSpace(req.Repo) == "" ||
 		strings.TrimSpace(req.Content) == "" {
-		http.Error(w, "missing required fields", http.StatusBadRequest)
+		WriteError(w, http.StatusBadRequest, "missing required fields")
 		return
 	}
 
@@ -47,13 +50,12 @@ func (h *Handler) AskHandler(w http.ResponseWriter, r *http.Request) {
 		req.Content,
 	)
 	if err != nil {
-		http.Error(w, "failed to generate response", http.StatusInternalServerError)
+		WriteError(w, http.StatusInternalServerError, "failed to generate response")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(AskResponse{Response: res}); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		WriteError(w, http.StatusInternalServerError, "failed to encode response")
 		return
 	}
 }
