@@ -6,11 +6,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/LucasM4r/repomind/internal/cache"
 	"github.com/LucasM4r/repomind/internal/config"
 	"github.com/LucasM4r/repomind/internal/db"
 	"github.com/LucasM4r/repomind/internal/ingestor"
 	"github.com/LucasM4r/repomind/internal/providers"
 	"github.com/LucasM4r/repomind/internal/providers/github"
+	"github.com/LucasM4r/repomind/internal/rag"
 	"github.com/LucasM4r/repomind/internal/rpc"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -63,6 +65,10 @@ func (a *App) Close() {
 	if a.grpcConn != nil {
 		a.grpcConn.Close()
 	}
+}
+
+func (a *App) RAGService() *rag.RAG {
+	return rag.NewRAGService(a.aiClient, a.vectorRepo, &cache.SessionCache{}, 10)
 }
 
 func (a *App) Run() {

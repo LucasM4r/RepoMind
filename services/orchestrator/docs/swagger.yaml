@@ -1,0 +1,62 @@
+definitions:
+  handlers.AskRequest:
+    properties:
+      content:
+        type: string
+      owner:
+        type: string
+      repo:
+        type: string
+      session_id:
+        type: string
+    type: object
+  handlers.AskResponse:
+    properties:
+      response:
+        type: string
+    type: object
+  handlers.ErrorResponse:
+    properties:
+      code:
+        type: integer
+      message:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /api/v1/ask:
+    post:
+      consumes:
+      - application/json
+      description: Ask a question to the RAG model and get a response
+      parameters:
+      - description: Ask request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AskRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AskResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "405":
+          description: Method Not Allowed
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Ask a question to the RAG model
+      tags:
+      - ask
+swagger: "2.0"

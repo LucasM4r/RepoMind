@@ -17,6 +17,18 @@ type AskResponse struct {
 	Response string `json:"response"`
 }
 
+// AskHandler godoc
+// @Summary Ask a question to the RAG model
+// @Description Ask a question to the RAG model and get a response
+// @Tags ask
+// @Accept json
+// @Produce json
+// @Param request body AskRequest true "Ask request"
+// @Success 200 {object} AskResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 405 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/ask [post]
 func (h *Handler) AskHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteError(w, http.StatusMethodNotAllowed, "method not allowed")

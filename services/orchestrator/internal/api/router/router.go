@@ -3,6 +3,8 @@ package router
 import (
 	"net/http"
 
+	httpSwagger "github.com/swaggo/http-swagger"
+
 	"github.com/LucasM4r/repomind/internal/api/handlers"
 	"github.com/LucasM4r/repomind/internal/api/middleware"
 	"github.com/LucasM4r/repomind/internal/rag"
@@ -22,6 +24,8 @@ func NewRouter(ragService *rag.RAG) *Router {
 
 func (r *Router) RegisterHandlers() {
 	r.mux.HandleFunc("/api/v1/ask", r.handler.AskHandler)
+	r.mux.Handle("/api/docs/", httpSwagger.WrapHandler)
+	r.mux.Handle("/api/docs", http.RedirectHandler("/api/docs/", http.StatusMovedPermanently))
 }
 
 func (r *Router) Handler() http.Handler {
