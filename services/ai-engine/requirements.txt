@@ -1,0 +1,6 @@
+grpcio>=1.74,<2
+protobuf==6.33.5
+langchain-huggingface>=0.3,<0.4
+transformers>=4.55,<5
+sentence-transformers>=5.1,<6
+torch>=2.8,<3
