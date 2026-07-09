@@ -3,10 +3,9 @@ package app
 import (
 	"context"
 	"log"
-	"sync"
-	"time"
 
 	"github.com/LucasM4r/repomind/internal/cache"
+	"github.com/LucasM4r/repomind/internal/chunker"
 	"github.com/LucasM4r/repomind/internal/config"
 	"github.com/LucasM4r/repomind/internal/db"
 	"github.com/LucasM4r/repomind/internal/ingestor"
@@ -26,7 +25,10 @@ type App struct {
 	grpcConn   *grpc.ClientConn
 	aiClient   *rpc.AIClient
 	vectorRepo *db.VectorRepository
-	ghProvider providers.Fetcher
+	ingestor   *ingestor.Ingestor
+
+	providers   map[string]providers.Fetcher
+	jobsChannel chan ingestor.Job
 }
 
 func NewApp(cfg *config.Config) (*App, error) {
@@ -46,15 +48,41 @@ func NewApp(cfg *config.Config) (*App, error) {
 	repo := db.VectorRepository{DB: pool}
 
 	ghProvider := github.NewClient(cfg.GithubToken)
+	jobsChannel := make(chan ingestor.Job, 100)
+
+	registry := map[string]providers.Fetcher{
+		"github": ghProvider,
+	}
+
+	maxChunkSize := 1500
+	overlapLines := 50
+
+	fallbackChunker := chunker.NewLineChunker(maxChunkSize, overlapLines)
+	codeChunker := chunker.NewTreeSitterChunker(maxChunkSize, fallbackChunker)
 
 	return &App{
-		cfg:        cfg,
-		dbPool:     pool,
-		grpcConn:   conn,
-		aiClient:   aiClient,
-		vectorRepo: &repo,
-		ghProvider: ghProvider,
+		cfg:         cfg,
+		dbPool:      pool,
+		grpcConn:    conn,
+		aiClient:    aiClient,
+		vectorRepo:  &repo,
+		providers:   registry,
+		jobsChannel: jobsChannel,
+		ingestor:    ingestor.NewIngestor(aiClient, &repo, codeChunker),
 	}, nil
+}
+
+func (a *App) EnqueueJob(job ingestor.Job) {
+	a.jobsChannel <- job
+}
+
+func (a *App) Ingestor() *ingestor.Ingestor {
+	return a.ingestor
+}
+
+func (a *App) GetProvider(name string) (providers.Fetcher, bool) {
+	provider, exists := a.providers[name]
+	return provider, exists
 }
 
 func (a *App) Close() {
@@ -71,37 +99,12 @@ func (a *App) RAGService() *rag.RAG {
 	return rag.NewRAGService(a.aiClient, a.vectorRepo, &cache.SessionCache{}, 10)
 }
 
-func (a *App) Run() {
-	jobsChannel := make(chan ingestor.Job, 100)
-	var wg sync.WaitGroup
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
-	ing := ingestor.NewIngestor(a.aiClient, a.vectorRepo)
-	log.Printf("[INFO] Initializing %d workers", a.cfg.MaxWorkers)
+func (a *App) Run(ctx context.Context) {
+	log.Printf("[INFO] Initializing %d background workers", a.cfg.MaxWorkers)
 	for w := 1; w <= a.cfg.MaxWorkers; w++ {
-		wg.Add(1)
 		go func(workerID int) {
-			defer wg.Done()
-			ingestor.Worker(ctx, workerID, jobsChannel, ing)
+			log.Printf("[INFO] Worker %d started", workerID)
+			ingestor.Worker(ctx, workerID, a.jobsChannel, a.ingestor)
 		}(w)
 	}
-
-	projects := []struct{ Owner, Repo string }{
-		{"LucasM4r", "RT-TELEMETRY-DASHBOARD"},
-	}
-
-	for _, p := range projects {
-		jobsChannel <- ingestor.Job{
-			Owner:    p.Owner,
-			Repo:     p.Repo,
-			Provider: a.ghProvider,
-		}
-	}
-
-	close(jobsChannel)
-	wg.Wait()
-
-	log.Printf("[INFO] Ingestion process finished successfully")
 }

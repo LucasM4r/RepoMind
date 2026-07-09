@@ -15,15 +15,19 @@ type Router struct {
 	handler *handlers.Handler
 }
 
-func NewRouter(ragService *rag.RAG) *Router {
-	return &Router{
+func NewRouter(enqueuer handlers.JobEnqueuer, ragService *rag.RAG) *Router {
+	r := &Router{
 		mux:     http.NewServeMux(),
-		handler: handlers.NewHandler(ragService),
+		handler: handlers.NewHandler(enqueuer, ragService),
 	}
+
+	return r
 }
 
 func (r *Router) RegisterHandlers() {
 	r.mux.HandleFunc("/api/v1/ask", r.handler.AskHandler)
+	r.mux.HandleFunc("/api/v1/ingest", r.handler.IngestHandler)
+
 	r.mux.Handle("/api/docs/", httpSwagger.WrapHandler)
 	r.mux.Handle("/api/docs", http.RedirectHandler("/api/docs/", http.StatusMovedPermanently))
 }

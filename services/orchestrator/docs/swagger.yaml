@@ -1,5 +1,5 @@
 definitions:
-  handlers.AskRequest:
+  internal_api_handlers.AskRequest:
     properties:
       content:
         type: string
@@ -10,16 +10,36 @@ definitions:
       session_id:
         type: string
     type: object
-  handlers.AskResponse:
+  internal_api_handlers.AskResponse:
     properties:
       response:
         type: string
     type: object
-  handlers.ErrorResponse:
+  internal_api_handlers.ErrorResponse:
     properties:
       code:
         type: integer
       message:
+        type: string
+    type: object
+  internal_api_handlers.IngestRequest:
+    properties:
+      owner:
+        type: string
+      provider:
+        type: string
+      repo:
+        type: string
+    type: object
+  internal_api_handlers.IngestResponse:
+    properties:
+      message:
+        type: string
+      owner:
+        type: string
+      provider:
+        type: string
+      repo:
         type: string
     type: object
 info:
@@ -36,27 +56,57 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handlers.AskRequest'
+          $ref: '#/definitions/internal_api_handlers.AskRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.AskResponse'
+            $ref: '#/definitions/internal_api_handlers.AskResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/internal_api_handlers.ErrorResponse'
         "405":
           description: Method Not Allowed
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/internal_api_handlers.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/internal_api_handlers.ErrorResponse'
       summary: Ask a question to the RAG model
       tags:
       - ask
+  /api/v1/ingest:
+    post:
+      consumes:
+      - application/json
+      description: Enqueue a repository for processing
+      parameters:
+      - description: Ingest request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handlers.IngestRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/internal_api_handlers.IngestResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_api_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_handlers.ErrorResponse'
+      summary: Ingest a repository
+      tags:
+      - ingest
 swagger: "2.0"
