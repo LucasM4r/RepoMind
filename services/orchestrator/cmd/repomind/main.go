@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 
 	_ "github.com/LucasM4r/repomind/docs"
@@ -37,8 +38,8 @@ func main() {
 	server := api.NewServer(r, address, port)
 
 	log.Printf("[INFO] Starting HTTP server on %s:%s", address, port)
-	if err := server.Start(); err != nil {
-		log.Printf("[ERROR] HTTP server error: %v", err)
+	if err := server.Start(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("[FATAL] HTTP server error: %v", err)
 	}
 
 	cancel()
