@@ -38,8 +38,12 @@ func main() {
 
 	log.Printf("[INFO] Starting HTTP server on %s:%s", address, port)
 	if err := server.Start(); err != nil {
-		log.Fatalf("[FATAL] Failed to start HTTP server: %v", err)
+		log.Printf("[ERROR] HTTP server error: %v", err)
 	}
+
+	cancel()
+	application.Wait()
+	log.Println("[INFO] Application shutdown complete")
 }
 
 func getEnv(key, fallback string) string {
