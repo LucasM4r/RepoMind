@@ -10,10 +10,11 @@ import (
 )
 
 type Config struct {
-	DatabaseURL string
-	GithubToken string
-	MaxWorkers  int
-	AIEngineURL string
+	DatabaseURL        string
+	GithubToken        string
+	MaxWorkers         int
+	AIEngineURL        string
+	MaxConcurrentFiles int
 }
 
 func LoadEnv() (*Config, error) {
@@ -48,9 +49,10 @@ func LoadEnv() (*Config, error) {
 	}
 
 	return &Config{
-		DatabaseURL: dbURL,
-		GithubToken: ghToken,
-		MaxWorkers:  maxWorkers,
-		AIEngineURL: aiURL,
+		DatabaseURL:        dbURL,
+		GithubToken:        ghToken,
+		MaxWorkers:         maxWorkers,
+		AIEngineURL:        aiURL,
+		MaxConcurrentFiles: 5,
 	}, nil
 }

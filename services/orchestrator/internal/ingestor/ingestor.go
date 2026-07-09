@@ -2,12 +2,13 @@ package ingestor
 
 import (
 	"archive/zip"
-	"bytes"
 	"context"
 	"io"
 	"log"
+	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 
 	"github.com/LucasM4r/repomind/internal/chunker"
 	"github.com/LucasM4r/repomind/internal/db"
@@ -23,16 +24,18 @@ type Job struct {
 }
 
 type Ingestor struct {
-	AIClient *rpc.AIClient
-	Repo     *db.VectorRepository
-	Chunker  chunker.Chunker
+	AIClient           *rpc.AIClient
+	Repo               *db.VectorRepository
+	Chunker            chunker.Chunker
+	MaxConcurrentFiles int
 }
 
-func NewIngestor(ai *rpc.AIClient, repo *db.VectorRepository, codeChunker chunker.Chunker) *Ingestor {
+func NewIngestor(ai *rpc.AIClient, repo *db.VectorRepository, codeChunker chunker.Chunker, maxConcurrentFiles int) *Ingestor {
 	return &Ingestor{
-		AIClient: ai,
-		Repo:     repo,
-		Chunker:  codeChunker,
+		AIClient:           ai,
+		Repo:               repo,
+		Chunker:            codeChunker,
+		MaxConcurrentFiles: maxConcurrentFiles,
 	}
 }
 
@@ -66,26 +69,49 @@ func (in *Ingestor) processJob(ctx context.Context, id int, job Job) {
 }
 
 func (in *Ingestor) ProcessZip(ctx context.Context, owner, repo string, resp io.ReadCloser) error {
-	bodyBytes, err := io.ReadAll(resp)
-	if err != nil {
-		return err
-	}
+	sem := make(chan struct{}, in.MaxConcurrentFiles)
+	var wg sync.WaitGroup
+	var firstErr error
+	var once sync.Once
 
-	reader, err := zip.NewReader(bytes.NewReader(bodyBytes), int64(len(bodyBytes)))
+	tmpFile, err := os.CreateTemp("", "repo-*.zip")
 	if err != nil {
 		return err
 	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := io.Copy(tmpFile, resp); err != nil {
+		tmpFile.Close()
+		return err
+	}
+	tmpFile.Close()
+
+	reader, err := zip.OpenReader(tmpFile.Name())
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
 
 	for _, file := range reader.File {
 		if file.FileInfo().IsDir() || !isCodeFile(file.Name) {
 			continue
 		}
+		wg.Add(1)
+		sem <- struct{}{} // Acquire semaphore
+		go func(file *zip.File) {
+			defer wg.Done()
+			defer func() { <-sem }() // Release Semaphore
+			if err := in.processFile(ctx, owner, repo, file); err != nil {
+				log.Printf("[WARNING] Failed to process file %s: %v", file.Name, err)
+				once.Do(func() {
+					firstErr = err
+				})
+			}
 
-		if err := in.processFile(ctx, owner, repo, file); err != nil {
-			log.Printf("[WARNING] Failed to process file %s: %v", file.Name, err)
-		}
+		}(file)
 	}
-	return nil
+	wg.Wait()
+	return firstErr
 }
 func (in *Ingestor) processFile(ctx context.Context, owner, repo string, file *zip.File) error {
 	rc, err := file.Open()

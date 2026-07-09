@@ -70,7 +70,7 @@ func NewApp(cfg *config.Config) (*App, error) {
 		vectorRepo:  &repo,
 		providers:   registry,
 		jobsChannel: jobsChannel,
-		ingestor:    ingestor.NewIngestor(aiClient, &repo, codeChunker),
+		ingestor:    ingestor.NewIngestor(aiClient, &repo, codeChunker, cfg.MaxConcurrentFiles),
 	}, nil
 }
 
