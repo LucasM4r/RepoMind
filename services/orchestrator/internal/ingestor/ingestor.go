@@ -8,6 +8,7 @@ import (
 	"log"
 	"path/filepath"
 	"strconv"
+	"sync"
 
 	"github.com/LucasM4r/repomind/internal/chunker"
 	"github.com/LucasM4r/repomind/internal/db"
@@ -66,6 +67,9 @@ func (in *Ingestor) processJob(ctx context.Context, id int, job Job) {
 }
 
 func (in *Ingestor) ProcessZip(ctx context.Context, owner, repo string, resp io.ReadCloser) error {
+	totalThreads := 5
+	sem := make(chan struct{}, totalThreads)
+	var wg sync.WaitGroup
 	bodyBytes, err := io.ReadAll(resp)
 	if err != nil {
 		return err
@@ -80,11 +84,18 @@ func (in *Ingestor) ProcessZip(ctx context.Context, owner, repo string, resp io.
 		if file.FileInfo().IsDir() || !isCodeFile(file.Name) {
 			continue
 		}
+		wg.Add(1)
+		sem <- struct{}{} // Acquire semaphore
+		go func(file *zip.File) {
+			defer wg.Done()
+			defer func() { <-sem }() // Release Semaphore
+			if err := in.processFile(ctx, owner, repo, file); err != nil {
+				log.Printf("[WARNING] Failed to process file %s: %v", file.Name, err)
+			}
 
-		if err := in.processFile(ctx, owner, repo, file); err != nil {
-			log.Printf("[WARNING] Failed to process file %s: %v", file.Name, err)
-		}
+		}(file)
 	}
+	wg.Wait()
 	return nil
 }
 func (in *Ingestor) processFile(ctx context.Context, owner, repo string, file *zip.File) error {
