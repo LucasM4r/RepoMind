@@ -29,7 +29,7 @@ func LoadEnv() (*Config, error) {
 
 	ghToken := os.Getenv("GITHUB_TOKEN")
 	if ghToken == "" {
-		return nil, errors.New("GITHUB_TOKEN is required")
+		log.Printf("[WARNING] GITHUB_TOKEN is not set. Public repositories will be fetched anonymously.")
 	}
 
 	aiURL := os.Getenv("AI_ENGINE_URL")

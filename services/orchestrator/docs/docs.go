@@ -35,7 +35,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.AskRequest"
+                            "$ref": "#/definitions/internal_api_handlers.AskRequest"
                         }
                     }
                 ],
@@ -43,25 +43,71 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.AskResponse"
+                            "$ref": "#/definitions/internal_api_handlers.AskResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/internal_api_handlers.ErrorResponse"
                         }
                     },
                     "405": {
                         "description": "Method Not Allowed",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/internal_api_handlers.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/internal_api_handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ingest": {
+            "post": {
+                "description": "Enqueue a repository for processing",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ingest"
+                ],
+                "summary": "Ingest a repository",
+                "parameters": [
+                    {
+                        "description": "Ingest request body",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_handlers.IngestRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_handlers.IngestResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_handlers.ErrorResponse"
                         }
                     }
                 }
@@ -69,7 +115,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "handlers.AskRequest": {
+        "internal_api_handlers.AskRequest": {
             "type": "object",
             "properties": {
                 "content": {
@@ -86,7 +132,7 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.AskResponse": {
+        "internal_api_handlers.AskResponse": {
             "type": "object",
             "properties": {
                 "response": {
@@ -94,13 +140,44 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.ErrorResponse": {
+        "internal_api_handlers.ErrorResponse": {
             "type": "object",
             "properties": {
                 "code": {
                     "type": "integer"
                 },
                 "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api_handlers.IngestRequest": {
+            "type": "object",
+            "properties": {
+                "owner": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "repo": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api_handlers.IngestResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "repo": {
                     "type": "string"
                 }
             }

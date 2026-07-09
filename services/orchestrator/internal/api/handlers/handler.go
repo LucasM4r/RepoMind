@@ -1,11 +1,24 @@
 package handlers
 
-import "github.com/LucasM4r/repomind/internal/rag"
+import (
+	"github.com/LucasM4r/repomind/internal/ingestor"
+	"github.com/LucasM4r/repomind/internal/providers"
+	"github.com/LucasM4r/repomind/internal/rag"
+)
 
-type Handler struct {
-	rag *rag.RAG
+type JobEnqueuer interface {
+	EnqueueJob(job ingestor.Job)
+	GetProvider(name string) (providers.Fetcher, bool)
 }
 
-func NewHandler(ragService *rag.RAG) *Handler {
-	return &Handler{rag: ragService}
+type Handler struct {
+	enqueuer   JobEnqueuer
+	ragService *rag.RAG
+}
+
+func NewHandler(enqueuer JobEnqueuer, ragService *rag.RAG) *Handler {
+	return &Handler{
+		enqueuer:   enqueuer,
+		ragService: ragService,
+	}
 }

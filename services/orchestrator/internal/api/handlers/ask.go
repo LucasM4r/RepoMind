@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -54,7 +55,7 @@ func (h *Handler) AskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := h.rag.GenerateResponse(
+	res, err := h.ragService.GenerateResponse(
 		r.Context(),
 		req.SessionID,
 		req.Owner,
@@ -62,6 +63,7 @@ func (h *Handler) AskHandler(w http.ResponseWriter, r *http.Request) {
 		req.Content,
 	)
 	if err != nil {
+		log.Printf("[ERROR][ASK] failed to generate response for %s/%s session=%s: %v", req.Owner, req.Repo, req.SessionID, err)
 		WriteError(w, http.StatusInternalServerError, "failed to generate response")
 		return
 	}

@@ -40,11 +40,18 @@ func buildRetrievedContext(chunks []domain.RetrievedChunk) string {
 		return ""
 	}
 
+	const maxChunkChars = 700
+
 	var builder strings.Builder
-	builder.WriteString("Use the following repository context when relevant:\n")
+	builder.WriteString("Repository snippets:\n")
 
 	for i, chunk := range chunks {
-		builder.WriteString(fmt.Sprintf("[%d] owner=%s repo=%s distance=%.4f\n%s\n\n", i+1, chunk.Owner, chunk.Repo, chunk.Distance, chunk.Content))
+		content := chunk.Content
+		if len(content) > maxChunkChars {
+			content = content[:maxChunkChars] + "..."
+		}
+
+		builder.WriteString(fmt.Sprintf("Snippet %d:\n%s\n\n", i+1, content))
 	}
 
 	return builder.String()

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -26,9 +27,16 @@ func main() {
 	address := getEnv("APP_ADDRESS", "0.0.0.0")
 	port := getEnv("APP_PORT", "3001")
 
-	r := router.NewRouter(application.RAGService())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	application.Run(ctx)
+
+	r := router.NewRouter(application, application.RAGService())
+
 	server := api.NewServer(r, address, port)
 
+	log.Printf("[INFO] Starting HTTP server on %s:%s", address, port)
 	if err := server.Start(); err != nil {
 		log.Fatalf("[FATAL] Failed to start HTTP server: %v", err)
 	}

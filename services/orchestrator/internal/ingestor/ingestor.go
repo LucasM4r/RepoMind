@@ -25,10 +25,15 @@ type Job struct {
 type Ingestor struct {
 	AIClient *rpc.AIClient
 	Repo     *db.VectorRepository
+	Chunker  chunker.Chunker
 }
 
-func NewIngestor(ai *rpc.AIClient, repo *db.VectorRepository) *Ingestor {
-	return &Ingestor{AIClient: ai, Repo: repo}
+func NewIngestor(ai *rpc.AIClient, repo *db.VectorRepository, codeChunker chunker.Chunker) *Ingestor {
+	return &Ingestor{
+		AIClient: ai,
+		Repo:     repo,
+		Chunker:  codeChunker,
+	}
 }
 
 func Worker(ctx context.Context, id int, jobs <-chan Job, ing *Ingestor) {
