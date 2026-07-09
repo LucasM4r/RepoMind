@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log"
+	"sync"
 
 	"github.com/LucasM4r/repomind/internal/cache"
 	"github.com/LucasM4r/repomind/internal/chunker"
@@ -29,6 +30,7 @@ type App struct {
 
 	providers   map[string]providers.Fetcher
 	jobsChannel chan ingestor.Job
+	wg          sync.WaitGroup
 }
 
 func NewApp(cfg *config.Config) (*App, error) {
@@ -102,9 +104,15 @@ func (a *App) RAGService() *rag.RAG {
 func (a *App) Run(ctx context.Context) {
 	log.Printf("[INFO] Initializing %d background workers", a.cfg.MaxWorkers)
 	for w := 1; w <= a.cfg.MaxWorkers; w++ {
+		a.wg.Add(1)
 		go func(workerID int) {
 			log.Printf("[INFO] Worker %d started", workerID)
+			defer a.wg.Done()
 			ingestor.Worker(ctx, workerID, a.jobsChannel, a.ingestor)
 		}(w)
 	}
+}
+
+func (a *App) Wait() {
+	a.wg.Wait()
 }
